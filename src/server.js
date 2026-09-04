@@ -1,5 +1,6 @@
 const http = require('http');
-const { connect, isReady, sendMessage } = require('./whatsapp');
+const { URL } = require('url');
+const { connect, isReady, sendMessage, getMessages } = require('./whatsapp');
 const { toJid } = require('./config');
 
 const PORT = process.env.PORT || 3000;
@@ -17,6 +18,23 @@ function readBody(req) {
 }
 
 const server = http.createServer(async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    return res.end();
+  }
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (req.method === 'GET' && url.pathname === '/messages') {
+    const since = url.searchParams.get('since');
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ready: isReady(), messages: getMessages(since) }));
+  }
+
   if (req.method === 'POST' && req.url === '/notify') {
     let body;
     try {

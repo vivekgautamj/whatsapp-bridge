@@ -6,6 +6,8 @@ const logger = pino({ level: 'silent' });
 
 let sock = null;
 let ready = false;
+const MAX_MESSAGES = 500;
+const messages = [];
 
 async function connect() {
   const { state, saveCreds } = await useMultiFileAuthState('auth');
@@ -43,15 +45,24 @@ async function connect() {
     }
   });
 
-  sock.ev.on('messages.upsert', ({ messages }) => {
-    for (const msg of messages) {
-      if (msg.key.fromMe) continue;
+  sock.ev.on('messages.upsert', ({ messages: incoming }) => {
+    for (const msg of incoming) {
       const from = msg.key.remoteJid;
       const text =
         msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text ||
         '';
-      if (text) console.log(`[incoming] ${from}: ${text}`);
+      if (!text) continue;
+
+      messages.push({
+        from,
+        text,
+        fromMe: !!msg.key.fromMe,
+        timestamp: Date.now(),
+      });
+      if (messages.length > MAX_MESSAGES) messages.shift();
+
+      if (!msg.key.fromMe) console.log(`[incoming] ${from}: ${text}`);
     }
   });
 
@@ -69,4 +80,10 @@ async function sendMessage(jid, text) {
   await sock.sendMessage(jid, { text });
 }
 
-module.exports = { connect, isReady, sendMessage };
+function getMessages(sinceTimestamp) {
+  if (!sinceTimestamp) return messages;
+  const since = Number(sinceTimestamp) || 0;
+  return messages.filter((m) => m.timestamp > since);
+}
+
+module.exports = { connect, isReady, sendMessage, getMessages };
