@@ -1,7 +1,10 @@
+const path = require('path');
+const fs = require('fs');
 const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const pino = require('pino');
 
+const AUTH_DIR = path.join(__dirname, '..', 'auth');
 const logger = pino({ level: 'silent' });
 
 let sock = null;
@@ -10,7 +13,10 @@ const MAX_MESSAGES = 500;
 const messages = [];
 
 async function connect() {
-  const { state, saveCreds } = await useMultiFileAuthState('auth');
+  const hasSession = fs.existsSync(AUTH_DIR) && fs.readdirSync(AUTH_DIR).length > 0;
+  console.log(hasSession ? `Restoring session from ${AUTH_DIR}` : `No saved session — scan QR to pair (${AUTH_DIR})`);
+
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
   sock = makeWASocket({
     auth: state,
@@ -37,7 +43,7 @@ async function connect() {
       ready = false;
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       if (statusCode === DisconnectReason.loggedOut) {
-        console.log('Logged out. Delete the auth/ folder and restart to re-pair.');
+        console.log(`Logged out. Delete ${AUTH_DIR} and restart to re-pair.`);
       } else {
         console.log('Connection closed, reconnecting in 3s...');
         setTimeout(connect, 3000);
